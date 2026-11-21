@@ -100,35 +100,32 @@ reglas de transformación
 MarkdownWriter: Files, 
 Path y UTF-8
 Estructura del proyecto
+# HTML2Markdown
+
+Aplicación de consola desarrollada en **Java 17+** utilizando **exclusivamente clases de la API estándar de Java** (`java.net`, `javax.swing.text.html`, `java.nio.file`), sin bibliotecas externas. Descarga una página web mediante HTTP/HTTPS, interpreta su estructura HTML y genera un archivo local equivalente en formato Markdown codificado en UTF-8.
+
+## Arquitectura y estructura del proyecto
+
+```text
 HTML2Markdown/
 ├── README.md
 ├── .gitignore
 ├── src/
-│   
-│       
-│           
-│           
-│           
-│           
-│           
-└── main/
-└── java/
-├── HTML2Markdown.java
-├── WebClient.java
-├── HtmlParser.java
-├── MarkdownConverter.java
-└── MarkdownWriter.java
+│   └── main/
+│       └── java/
+│           ├── HTML2Markdown.java      # Validación de argumentos y coordinación del flujo
+│           ├── WebClient.java          # Cliente HTTP/HTTPS (URL, URLConnection, HttpURLConnection)
+│           ├── HtmlParser.java         # Análisis estructural con ParserDelegator y ParserCallback
+│           ├── MarkdownConverter.java  # Reglas de conversión, elementos anidados y URLs relativas
+│           └── MarkdownWriter.java     # Escritura de archivos en UTF-8 con java.nio.file
 ├── tests/
-│   
-├── encabezados.html
-│   
-│   
-├── listas.html
-├── enlaces.html
-│   
-└── documento_completo.html
+│   ├── encabezados.html
+│   ├── listas.html
+│   ├── enlaces.html
+│   ├── documento_completo.html
+│   └── vacia.html
 └── output/
-└── articulo.md
+    └── ejemplo_completo.md
 Excluya output/ del control de versiones, salvo ejemplos de salida expresamente documentados.
 7. Actividades de desarrollo
 Actividad 1. Recuperación del documento HTML
@@ -188,18 +185,18 @@ Controle URL inválida, servidor inaccesible, respuesta HTTP no exitosa, conteni
 escritura.
 Construya documentos HTML de prueba y compruebe cada caso.
 Prueba Condición Resultado esperado
-P01 Sin argumentos Mensaje de uso
-P02 URL inválida Error controlado
-P03 Página inexistente Error HTTP
-P04 Encabezados h1–h6 Conversión correcta
-P05 Negritas y cursivas Formato preservado
-P06 Enlaces absolutos y relativos Enlaces Markdown válidos
-P07 Imágenes con texto alternativo Sintaxis ![alt](URL)
-P08 Listas ordenadas y no ordenadas Estructura conservada
-P09 Elementos anidados Jerarquía y contenido conservados
-P10 Etiquetas script y style Contenido excluido
-P11 Acentos y entidades HTML Caracteres preservados
-P12 Página HTML vacía Archivo vacío o mensaje informativo
+P01 Sin argumentos Mensaje de uso Muestra mensaje de uso y termina con código 1
+P02 URL inválida Error controlado Error controlado de validación (Error de validación)
+P03 Página inexistente Error HTTP Error HTTP controlado (Respuesta HTTP no exitosa: 404)
+P04 Encabezados h1–h6 Conversión correcta Convertidos a # hasta ######
+P05 Negritas y cursivas Formato preservado Preservados como **texto** y *texto*
+P06 Enlaces absolutos y relativos Enlaces Markdown válidos Resueltos a URL absolutas en formato [texto](URL)
+P07 Imágenes con texto alternativo Sintaxis ![alt](URL) Convertidas a ![alt](URL) con ruta resuelta
+P08 Listas ordenadas y no ordenadas Estructura conservada Viñetas - y numeración 1. conservadas
+P09 Elementos anidados Jerarquía y contenido conservados Indentación y jerarquía preservadas
+P10 Etiquetas script y style Contenido excluido Contenido omitido por completo
+P11 Acentos y entidades HTML Caracteres preservados Caracteres UTF-8 preservados correctamente
+P12 Página HTML vacía Archivo vacío o mensaje informativo Genera archivo vacío e imprime aviso informativo
 Abra el Markdown generado en el visor de IntelliJ IDEA o GitHub. Compare las salidas con archivos
 Markdown esperados creados manualmente para las pruebas.
 8. Pruebas de funcionamiento
@@ -217,15 +214,50 @@ controles adicionales de redirecciones y destinos internos.
 10. Preguntas de reflexión
 Responda en README.md :
 1. ¿Qué papel desempeña la aplicación dentro de una arquitectura cliente-servidor?
+La aplicación actúa como un cliente HTTP especializado (agente de usuario). Inicia la comunicación enviando peticiones GET hacia un servidor web remoto, recibe la representación HTML del recurso solicitado, la interpreta localmente sin interfaz gráfica y transforma su contenido en un archivo Markdown almacenado en el sistema local.
+
 2. ¿Qué responsabilidades corresponden al servidor y cuáles al cliente?
+Servidor: Escuchar peticiones entrantes, localizar el recurso asociado a la ruta solicitada, emitir el código de estado HTTP correspondiente (200, 301, 404, etc.), enviar las cabeceras descriptivas (Content-Type, Content-Length, Location) y transmitir el flujo de bytes del documento.
+
+Cliente (HTML2Markdown): Validar la URL y el protocolo (http/https), configurar tiempos de espera (timeouts) y límites de lectura, verificar el estado y tipo MIME de la respuesta, detectar la codificación (Charset), construir el árbol HTML, resolver rutas relativas y escribir el archivo .md en disco.
+
 3. ¿Qué diferencia existe entre recuperar HTML e interpretar su estructura?
+Recuperar HTML consiste en descargar una secuencia plana de bytes o caracteres mediante el protocolo HTTP. Interpretar su estructura implica realizar un análisis sintáctico (parsing) para reconocer etiquetas de apertura y cierre, atributos, entidades y relaciones jerárquicas padre-hijo, separando el contenido textual útil del marcado estructural y del código embebido (<script>, <style>).
+
 4. ¿Por qué no basta reemplazar etiquetas HTML con expresiones regulares?
+El HTML es un lenguaje libre de contexto que permite anidamiento recursivo arbitrario, atributos en distinto orden, comentarios y cierres implícitos. Las expresiones regulares carecen de memoria de pila (stack) para emparejar etiquetas anidadas del mismo tipo (como sublistas dentro de listas o énfasis combinado), por lo que fallan o corrompen el texto ante estructuras reales.
+
 5. ¿Qué dificultades presentan los elementos anidados?
+Orden del flujo textual: Preservar la secuencia exacta entre texto plano y etiquetas en línea (<p>Texto <strong>negrita <em>mixta</em></strong> fin</p>).
+
+Estado contextual acumulado: Mantener niveles de indentación en listas anidadas (<ul>/<ol>), prefijos en citas (<blockquote>) y desactivar el escape de caracteres Markdown dentro de <pre><code>.
+
+Cierres implícitos: Manejar documentos donde etiquetas como <li> o <p> se cierran implícitamente al abrir otra etiqueta hermana.
+
 6. ¿Qué información puede perderse al convertir HTML a Markdown?
+Markdown está diseñado para representar estructura documental básica, por lo que se pierden estilos visuales CSS (colores, tipografías, márgenes, cuadrículas), lógica interactiva JavaScript, atributos semánticos (class, id, data-*, aria-*), formularios y elementos multimedia incrustados (<video>, <audio>, <iframe>).
+
 7. ¿Por qué deben resolverse las URL relativas?
+En una página web, enlaces e imágenes suelen definirse respecto a la ruta del documento en el servidor (href="listas.html" o src="../img/logo.png"). Al guardar el archivo Markdown en una carpeta local fuera del servidor original, esas rutas relativas quedarían rotas si no se convierten a URL absolutas tomando como base la dirección descargada.
+
 8. ¿Qué ventajas ofrece separar descarga, análisis y conversión en clases?
+Aplica el Principio de Responsabilidad Única (SRP):
+
+Mantenibilidad: Modificar una regla de formato en MarkdownConverter no afecta la lógica de red en WebClient.
+
+Testabilidad: Permite probar el análisis y la conversión con cadenas HTML en memoria sin depender de red externa.
+
+Reutilización: Componentes como WebClient o MarkdownWriter pueden reutilizarse en otros proyectos sin cambios.
+
 9. ¿Qué limitaciones presenta ParserDelegator con HTML moderno?
+ParserDelegator está basado en la especificación HTML 3.2. No reconoce de forma nativa etiquetas semánticas modernas de HTML5 (<article>, <section>, <nav>, <main>, <header>, <footer>), tratándolas como etiquetas desconocidas (HTML.UnknownTag), y requiere pasar ignoreCharSet = true para evitar que lance ChangedCharSetException al leer <meta charset="...">.
+
 10. ¿Qué modificaciones serían necesarias para convertir tablas HTML a Markdown?
+Registrar en HtmlParser las etiquetas <table>, <thead>, <tbody>, <tr>, <th> y <td> para conservar filas y celdas en el árbol.
+
+En MarkdownConverter, agrupar las celdas de cada fila (<tr>) en una matriz de cadenas (List<List<String>>).
+
+Renderizar la primera fila como encabezado (| Col 1 | Col 2 |), insertar inmediatamente la fila separadora obligatoria de Markdown (| --- | --- |) y formatear las filas restantes escapando cualquier carácter tubería (\|) dentro del texto de las celdas.
 11. Entregables
 Entregue el enlace a un repositorio GitHub que incluya:
 Código fuente completo.
